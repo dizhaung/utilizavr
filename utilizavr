@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
+
+DPND=0
+hash tee 2>/dev/null || { echo "tee is not found in your system" &>2; DPND=1; }
+hash mkdir 2>/dev/null || { echo "mkdir is not found in your system" &>2; DPND=1; }
+hash snmpget 2>/dev/null || { echo "snmpget is not found in your system" &>2; DPND=1; }
+hash date 2>/dev/null || { echo "date is not found in your system" &>2; DPND=1; }
+hash awk 2>/dev/null || { echo "awk is not found in your system" &>2; DPND=1; }
+hash bc 2>/dev/null || { echo "bc is not found in your system" &>2; DPND=1; }
+if [[ $DPND -ne 0 ]]; then
+    echo &>2 "Not all dependencies met"
+    exit 1
+fi
+
+set +e
+read -r -d '' help <<- EOF
+utilizavr - script that measure interface utilization and output it in Mbps
+
+Script will create temporary file where it will store query results for diff calculation,
+than you can measure utilization by periodically polling target. Less interval betwean
+polls - less deviation from real utilization.
+
+You need that applications on your PATH: tee, mkdir, snmpget, date, awk, bc.
+
+usage: utilizavr HOST IFINDEX COMMUNITY [OPTIONS]
+
+REQUIRED ARGUMENTS:
+    HOST                        what device we gonna query
+    IFINDEX                     SNMP index of interface that we want to check
+    COMMUNITY                   SNMP community name that we gonna use
+
+OPTIONS:
+    -d, --dir TMPDIR            where to store temporary files (default ~/.utilizavr)
+    -t, --threshold THRESHOLD   upper limit of throughput on checked link in Mbps (default
+                                    is querying it by ifHighSpeed OID)
+EOF
+set -e
+
+readonly LOG_FILE="/tmp/$(basename "$0").log"
+info () { echo "$(date +'%d %b %Y %H:%M:%S') [INFO]  $*" >> "$LOG_FILE" ; }
+warning () { echo "$(date +'%d %b %Y %H:%M:%S') [WARNING]  $*" | tee -a "$LOG_FILE" >&2 ; }
+error () { echo "$(date +'%d %b %Y %H:%M:%S') [ERROR]  $*" | tee -a "$LOG_FILE" >&2 ; }
+fatal () { echo "$(date +'%d %b %Y %H:%M:%S') [FATAL]  $*" | tee -a "$LOG_FILE" >&2 ; exit 1 ; }
+
+host=${1:-}
+ifindex=${2:-}
+community=${3:-}
+option=${4:-}
+param=${5:-}
+tmpdir=""
+threshold=""
+
+if [[ -z $host ]]; then
+    echo "$help"
+    fatal "No arguments provided, check usage help"
+elif [[ $host = "--help" || $host = "-h" ]]; then
+    echo "$help"
+    exit 0
+elif [[ -z "$ifindex" || -z "$community" ]]; then
+    fatal "Not enough arguments, need that arguments in order: host ifindex community"
+fi
+
+if [[ ! -z $option ]]; then
+    while :; do
+        case $option in
+            -d|--dir)
+                tmpdir="$param"
+                shift 2
+                ;;
+            -t|--threshold)
+                threshold="$param"
+                shift 2
+                ;;
+            ?*)
+                echo >&2 "unknown option $4"
+                ;;
+            *)
+                break
+        esac
+        shift
+        option=${4:-}
+        param=${5:-}
+    done
+fi
+
+numre='^[0-9]+$'
+
+if ! [[ $ifindex =~ $numre ]]; then
+    fatal "Ifindex must be a number, you input $ifindex"
+fi
+
+if [[ -z $tmpdir ]]; then
+    tmpdir=~/.utilizavr/
+fi
+
+if [[ ! -d $tmpdir ]]; then
+    mkdir "$tmpdir"
+fi
+
+filename="$tmpdir$host-$ifindex"
+if [[ ! -f $filename ]]; then
+    echo "0 0" > "$filename"
+fi
+
+if [[ -z $threshold ]]; then
+    info "No threshold provided, querying interface with ifindex $ifindex on $host for it's speed"
+    if ! threshold=$(snmpget -v 2c -c "$community" -Ov "$host" IF-MIB::ifHighSpeed."$ifindex"|awk '{print $2}'); then
+        fatal "SNMP error, check arguments and network"
+    fi
+elif ! [[ $threshold =~ $numre ]]; then
+    fatal "Threshold must be a number in Mbps, you input $threshold"
+fi
+
+info "Querying interface with $ifindex on $host for counters" 
+if ! octets_in=$(snmpget -v 2c -c "$community" -Ov "$host" IF-MIB::ifHCInOctets."$ifindex"|awk '{print $2}'); then
+    fatal "SNMP error, check arguments and network"
+fi
+if ! octets_out=$(snmpget -v 2c -c "$community" -Ov "$host" IF-MIB::ifHCOutOctets."$ifindex"|awk '{print $2}'); then
+    fatal "SNMP error, check arguments and network"
+fi
+
+time_diff=$(($(date +%s) - $(date +%s -r "$filename")))
+prev_octets_in=$(awk '{print $1}' "$filename")
+prev_octets_out=$(awk '{print $2}' "$filename")
+echo "$octets_in $octets_out" > "$filename"
+
+if [[ $prev_octets_in -eq 0 || $prev_octets_out -eq 0 ]]; then
+    info "Zero data in file, intilize it now. Try to run script again"
+    exit 0
+fi
+
+in_diff=$(echo "scale=2; (($octets_in - $prev_octets_in) * 8) / $time_diff / 1000000"|bc)
+out_diff=$(echo "scale=2; (($octets_out - $prev_octets_out) * 8) / $time_diff / 1000000"|bc)
+
+if [[ $(echo "$in_diff < 0"|bc) -eq 1 ]]; then
+    warning "Negative difference, possible counters wrap, use new values as difference"
+    in_diff=$octets_in
+fi
+
+if [[ $(echo "$out_diff < 0"|bc) -eq 1 ]]; then
+    warning "Negative difference, possible counters wrap, use new values as difference"
+    out_diff=$octets_out
+fi
+
+in_percent=$(echo "scale=2; $in_diff / $threshold * 100"|bc)
+out_percent=$(echo "scale=2; $out_diff / $threshold * 100"|bc)
+echo -e "Input utilizaton: $in_diff Mbps ($in_percent%)\nOutput utilization: $out_diff Mbps ($out_percent%)"
