@@ -9,7 +9,7 @@ Utilizavr poll an interface for _ifHCXOctets_, compare it to last run
 and show you an estimate of interface utilization and percent usage. To
 store last run numbers it create files for every pair 'host-interface'
 in __tempdir__ (which you can set explicitly, otherwise ~/.utlizavr will be
-used). Script gona write log into /tmp/utilizavr.log.
+used). Script gonna write log into /tmp/utilizavr.log.
 
 __NOTE__ On first run script can't count difference, obviously, because it
 hasn't previous values.
@@ -24,7 +24,7 @@ You can provide options such:
 *   -t, --threshold   throughput limit of that interface (it will query
                             interface with ifHighSpeed by default)
 
-__IMPORTANT__ That screept works only with version __2c__ of SNMP.
+__IMPORTANT__ That script works only with version __2c__ of SNMP.
 
 ## DEPENDENCIES 
 You will need that apps to use utilizavr:
@@ -39,9 +39,9 @@ You will need that apps to use utilizavr:
 ## PS
 That script is inspired in some way by 
 [Check SNMP Cisco Traffic](https://exchange.nagios.org/directory/Plugins/Hardware/Network-Gear/Cisco/Check-SNMP-Cisco-Traffic/details)
-plugin for Nagios by Michael Boehm, but I like to try to do somewaht similar
+plugin for Nagios by Michael Boehm, but I like to try to do somewhat similar
 by myself.
 
 Spot a typo? Have a suggestion to made script better? Or you think my code
 is shit? Feel free to contact me at yman at protonmail dot ch. Or open an
-issue righ here on GitHub.
+issue right here on GitHub.
