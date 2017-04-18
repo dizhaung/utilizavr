@@ -96,10 +96,11 @@ if [[ -z $tmpdir ]]; then
 fi
 
 if [[ ! -d $tmpdir ]]; then
+    warning "Directory $tmpdir does not exist, create it now"
     mkdir "$tmpdir"
 fi
 
-filename="$tmpdir$host-$ifindex"
+filename="$tmpdir/$host-$ifindex"
 if [[ ! -f $filename ]]; then
     echo "0 0" > "$filename"
 fi
@@ -127,7 +128,7 @@ prev_octets_out=$(awk '{print $2}' "$filename")
 echo "$octets_in $octets_out" > "$filename"
 
 if [[ $prev_octets_in -eq 0 || $prev_octets_out -eq 0 ]]; then
-    info "Zero data in file, intilize it now. Try to run script again"
+    warning "Zero data in file, intilize it now. Try to run script again after some time interval (1 min, for example)"
     exit 0
 fi
 
