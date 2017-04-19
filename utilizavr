@@ -9,6 +9,8 @@ hash snmpget 2>/dev/null || { echo "snmpget is not found in your system" &>2; DP
 hash date 2>/dev/null || { echo "date is not found in your system" &>2; DPND=1; }
 hash awk 2>/dev/null || { echo "awk is not found in your system" &>2; DPND=1; }
 hash bc 2>/dev/null || { echo "bc is not found in your system" &>2; DPND=1; }
+hash getopt 2>/dev/null || { echo "getopt is not found in your system" &>2; DPND=1; }
+
 if [[ $DPND -ne 0 ]]; then
     echo &>2 "Not all dependencies met"
     exit 1
@@ -44,51 +46,64 @@ warning () { echo "$(date +'%d %b %Y %H:%M:%S') [WARNING]  $*" | tee -a "$LOG_FI
 error () { echo "$(date +'%d %b %Y %H:%M:%S') [ERROR]  $*" | tee -a "$LOG_FILE" >&2 ; }
 fatal () { echo "$(date +'%d %b %Y %H:%M:%S') [FATAL]  $*" | tee -a "$LOG_FILE" >&2 ; exit 1 ; }
 
-host=${1:-}
-ifindex=${2:-}
-community=${3:-}
-option=${4:-}
-param=${5:-}
+host=""
+ifindex=""
+community=""
 tmpdir=""
 threshold=""
+help_needed=""
 
-if [[ -z $host ]]; then
-    echo "$help"
-    fatal "No arguments provided, check usage help"
-elif [[ $host = "--help" || $host = "-h" ]]; then
+SHORT=d:t:h
+LONG=directory:,threshold:,help
+PARSED=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
+
+eval set -- "$PARSED"
+while true; do
+    case "$1" in
+        -d|--directory)
+            tmpdir="$2"
+            shift 2
+            ;;
+        -t|--threshold)
+            threshold="$2"
+            shift 2
+            ;;
+        -h|--help)
+            help_needed=y
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Unknown error" >&2
+            exit 3
+            ;;
+    esac
+done
+
+if [[ $help_needed ]]; then
     echo "$help"
     exit 0
-elif [[ -z "$ifindex" || -z "$community" ]]; then
-    fatal "Not enough arguments, need that arguments in order: host ifindex community"
-fi
-
-if [[ ! -z $option ]]; then
-    while :; do
-        case $option in
-            -d|--dir)
-                tmpdir="$param"
-                shift 2
-                ;;
-            -t|--threshold)
-                threshold="$param"
-                shift 2
-                ;;
-            ?*)
-                echo >&2 "unknown option $4"
-                ;;
-            *)
-                break
-        esac
-        shift
-        option=${4:-}
-        param=${5:-}
-    done
+elif [[ $# -eq 0 ]];then
+    echo -e "No arguments provided, check usage help\n" >&2
+    echo "$help"
+    exit 2
+elif [[ $# -ne 3 ]];then
+    echo "Need exactly 3 arguments in that order: HOST IFINDEX COMMUNITY" >&2
+    exit 2
+else
+    host=$1
+    ifindex=$2
+    community=$3
 fi
 
 numre='^[0-9]+$'
 
 if ! [[ $ifindex =~ $numre ]]; then
-    fatal "Ifindex must be a number, you input $ifindex"
+    echo "Ifindex must be a number, you input $ifindex" >&2
+    exit 2
 fi
 
 if [[ -z $tmpdir ]]; then
@@ -111,7 +126,8 @@ if [[ -z $threshold ]]; then
         fatal "SNMP error, check arguments and network"
     fi
 elif ! [[ $threshold =~ $numre ]]; then
-    fatal "Threshold must be a number in Mbps, you input $threshold"
+    echo "Threshold must be a number in Mbps, you input $threshold" >&2
+    exit 2
 fi
 
 info "Querying interface with $ifindex on $host for counters" 

@@ -35,6 +35,14 @@ You will need that apps to use utilizavr:
 *   date
 *   awk
 *   bc
+*   getopt
+*   shunit2 __(for testing only)__
+
+## TESTS
+For running tests you need to provide correct path to shunit2 in last line 
+of *unit_tests* file. You also may want to change temporary directory used 
+by tests. For that purpose change _TMPDIR_ variable in _oneTimeSetUp_ 
+function. But tests gonna delete that folder after run anyway.
 
 ## PS
 That script is inspired in some way by 
@@ -45,3 +53,6 @@ by myself.
 Spot a typo? Have a suggestion to made script better? Or you think my code
 is shit? Feel free to contact me at yman at protonmail dot ch. Or open an
 issue right here on GitHub.
+
+## AUTHOR
+Written by Yakov Shiryaev (yman) in 2017.

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+oneTimeSetUp()
+{
+    TMPDIR=~/.utilizavr_tests
+    mkdir "$TMPDIR"
+}
+
+oneTimeTearDown()
+{
+    rm -rf $TMPDIR
+}
+
+test_not_enough_arguments()
+{
+    ./utilizavr hostname.domainname communityname -d $TMPDIR 2> $TMPDIR/error_not_enough_args
+    assertEquals "$?" 2
+    error=$(<$TMPDIR/error_not_enough_args)
+    assertEquals "$error" "Need exactly 3 arguments in that order: HOST IFINDEX COMMUNITY"
+}
+
+test_bad_ifindex()
+{
+    ./utilizavr hostname.domainname typo communityname -d $TMPDIR 2> $TMPDIR/error_ifindex
+    assertEquals "$?" 2
+    error=$(<$TMPDIR/error_ifindex)
+    assertEquals "$error" "Ifindex must be a number, you input typo"
+}
+
+. /home/yman/projects/foreign/shunit2/source/2.1/src/shunit2
