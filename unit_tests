@@ -27,4 +27,34 @@ test_bad_ifindex()
     assertEquals "$error" "Ifindex must be a number, you input typo"
 }
 
+test_help_printed()
+{
+    ./utilizavr --help > $TMPDIR/help_file
+    help_msg=$(<$TMPDIR/help_file)
+    if [[ $help_msg == *"utilizavr - script that"* ]];then
+        result=1
+    fi
+    assertEquals "$result" 1
+}
+
+test_directory_created()
+{
+    ./utilizavr example.com 1 public -d $TMPDIR 2> /dev/null
+    if [[ -d $TMPDIR ]];then
+        result=3
+    fi
+    assertEquals "$result" 3
+}
+
+test_snmp_error_showed_right_way()
+{
+    ./utilizavr example.com 1 public -d $TMPDIR 2> $TMPDIR/error_snmp
+    assertEquals "$?" 1
+    error=$(<$TMPDIR/error_snmp)
+    if [[ $error == *"SNMP error, check arguments and network"* ]];then
+        result=2
+    fi
+    assertEquals "$result" 2
+}
+
 . /home/yman/projects/foreign/shunit2/source/2.1/src/shunit2
